@@ -1,0 +1,115 @@
+from flask import Flask, request
+from twilio.twiml.messaging_response import MessagingResponse
+
+app = Flask(__name__)
+
+products = {
+    "1": {"name": "كرتون دجاج 700 جم", "price": 135},
+    "2": {"name": "كرتون دجاج 800 جم", "price": 153},
+    "3": {"name": "كرتون دجاج 900 جم", "price": 173},
+    "4": {"name": "كرتون دجاج 1000 جم", "price": 190},
+    "5": {"name": "كرتون دجاج 1100 جم", "price": 209},
+    "6": {"name": "كرتون دجاج 1200 جم", "price": 228},
+}
+
+customers = {}
+
+@app.route("/whatsapp", methods=["POST"])
+def whatsapp():
+
+    incoming_msg = request.values.get("Body", "").strip()
+    sender = request.values.get("From", "")
+
+    response = MessagingResponse()
+    msg = response.message()
+
+    if sender not in customers:
+
+        customers[sender] = {"step": "choose"}
+
+        menu = "🔥 أهلاً بك في مؤسسة موطن الدار\n\n"
+        menu += "المنتجات:\n\n"
+
+        for key, item in products.items():
+            menu += f"{key}- {item['name']} - {item['price']} ريال\n"
+
+        menu += "\nأرسل رقم المنتج"
+
+        msg.body(menu)
+        return str(response)
+
+    step = customers[sender]["step"]
+
+    if step == "choose":
+
+        if incoming_msg in products:
+
+            customers[sender]["product"] = incoming_msg
+            customers[sender]["step"] = "qty"
+
+            msg.body("كم الكمية المطلوبة؟")
+
+        else:
+            msg.body("اختر رقم صحيح")
+
+        return str(response)
+
+    if step == "qty":
+
+        customers[sender]["qty"] = int(incoming_msg)
+        customers[sender]["step"] = "name"
+
+        msg.body("أرسل الاسم")
+
+        return str(response)
+
+    if step == "name":
+
+        customers[sender]["name"] = incoming_msg
+        customers[sender]["step"] = "address"
+
+        msg.body("أرسل الموقع أو العنوان")
+
+        return str(response)
+
+    if step == "address":
+
+        product = products[customers[sender]["product"]]
+        qty = customers[sender]["qty"]
+
+        total = product["price"] * qty
+
+        final = f"""
+✅ تم تسجيل الطلب
+
+👤 الاسم:
+{customers[sender]['name']}
+
+📦 المنتج:
+{product['name']}
+
+🔢 الكمية:
+{qty}
+
+💰 الإجمالي:
+{total} ريال
+
+🚚 التوصيل يوم الأحد
+
+📍 العنوان:
+{incoming_msg}
+
+شكراً لثقتكم ❤️
+نتمنى مشاركة المتجر مع الأصدقاء 🌟
+"""
+
+        msg.body(final)
+
+        del customers[sender]
+
+        return str(response)
+
+    return str(response)
+
+if __name__ == "__main__":
+    app.run()
